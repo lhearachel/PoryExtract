@@ -18,6 +18,7 @@
 #define MAKE_SPRITE_ARGS(palette_path) { \
     "-palette", palette_path, \
     "-scanfronttoback", \
+    "-handleempty", \
 };
 
 static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitrogfx, fs::path &repo_root, indicators::ProgressBar &bar);
@@ -122,10 +123,16 @@ static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitro
         auto normal_pal_target = species_dir / "normal.pal";
         auto shiny_pal_target = species_dir / "shiny.pal";
 
-        nitrogfx::call(nitrogfx, std::get<1>(file_map[0]), female_back_target, sprite_args);
-        nitrogfx::call(nitrogfx, std::get<1>(file_map[1]), male_back_target, sprite_args);
-        nitrogfx::call(nitrogfx, std::get<1>(file_map[2]), female_front_target, sprite_args);
-        nitrogfx::call(nitrogfx, std::get<1>(file_map[3]), male_front_target, sprite_args);
+        if (!fs::is_empty(std::get<1>(file_map[0]))) { // female sprite exists
+            nitrogfx::call(nitrogfx, std::get<1>(file_map[0]), female_back_target, sprite_args);
+            nitrogfx::call(nitrogfx, std::get<1>(file_map[2]), female_front_target, sprite_args);
+        }
+
+        if (!fs::is_empty(std::get<1>(file_map[1]))) { // male sprite exists
+            nitrogfx::call(nitrogfx, std::get<1>(file_map[1]), male_back_target, sprite_args);
+            nitrogfx::call(nitrogfx, std::get<1>(file_map[3]), male_front_target, sprite_args);
+        }
+
         nitrogfx::call(nitrogfx, std::get<1>(file_map[4]), normal_pal_target, palette_args);
         nitrogfx::call(nitrogfx, std::get<1>(file_map[5]), shiny_pal_target, palette_args);
 
