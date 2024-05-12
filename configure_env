@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+KNARC=
+NITROGFX=
+NDSTOOL=
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --knarc)
+            KNARC="$2"
+            shift
+            shift
+            ;;
+        --nitrogfx)
+            NITROGFX="$2"
+            shift
+            shift
+            ;;
+        --ndstool)
+            NDSTOOL="$2"
+            shift
+            shift
+            ;;
+        *)
+            echo "Unrecognized arg $1"
+            shift
+            ;;
+    esac
+done
+
+cat > .env<< EOF
+export KNARC=$KNARC
+export NITROGFX=$NITROGFX
+export NDSTOOL=$NDSTOOL
+EOF
