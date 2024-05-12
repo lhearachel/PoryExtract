@@ -76,7 +76,7 @@ static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitro
         };
 
         for (auto [bin, ntr] : file_map) {
-            fs::rename(bin, ntr);
+            fs::copy_file(bin, ntr, fs::copy_options::overwrite_existing);
         }
 
         std::vector<std::string> sprite_args = MAKE_SPRITE_ARGS(std::get<1>(file_map[4]).string());
@@ -125,7 +125,7 @@ static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &n
             ntr_path = files[i].replace_extension(".NCLR");
         }
 
-        fs::rename(bin_path, ntr_path);
+        fs::copy_file(bin_path, ntr_path, fs::copy_options::overwrite_existing);
     }
 
     for (size_t i = 0; i < gOtherpokePals.size(); i++) {
