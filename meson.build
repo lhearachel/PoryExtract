@@ -4,6 +4,7 @@ subdir('src')
 
 argparse = dependency('argparse')
 json = dependency('nlohmann_json')
+indicators = dependency('indicators')
 
 knarc_exe = find_program('knarc', native: true)
 nitrogfx_exe = find_program('nitrogfx', native: true)
@@ -23,9 +24,13 @@ custom_target('configure',
 
 executable('poryextract',
     sources: cpp_sources,
+    cpp_args: [
+        '-std=c++20',
+    ],
     include_directories: include_directories('include'),
     dependencies: [
         argparse,
         json,
+        indicators,
     ]
 )

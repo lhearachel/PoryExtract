@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include <argparse/argparse.hpp>
+#include <indicators/indicators.hpp>
 #include <subprocess.hpp>
 
 #include "action.h"
@@ -51,6 +52,8 @@ int main(int argc, char *argv[]) {
         std::exit(1);
     }
 
+    indicators::show_console_cursor(false);
+
     fs::path rom_path(program.get("input"));
     fs::path repo_path(program.get("repo_root"));
     auto actions = program.get<std::vector<std::string>>("actions");
@@ -69,6 +72,7 @@ int main(int argc, char *argv[]) {
         match->second(rom_contents_root, repo_path, force_unpack);
     }
 
+    indicators::show_console_cursor(true);
     return 0;
 }
 

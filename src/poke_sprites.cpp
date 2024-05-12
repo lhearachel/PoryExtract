@@ -5,6 +5,9 @@
 #include <tuple>
 #include <vector>
 
+#include <indicators/progress_bar.hpp>
+#include <indicators/block_progress_bar.hpp>
+
 #include "action.h"
 #include "env.h"
 #include "knarc.h"
@@ -17,8 +20,8 @@
     "-scanfronttoback", \
 };
 
-static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitrogfx, fs::path &repo_root);
-static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &nitrogfx, fs::path &repo_root);
+static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitrogfx, fs::path &repo_root, indicators::ProgressBar &bar);
+static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &nitrogfx, fs::path &repo_root, indicators::ProgressBar &bar);
 
 void extract_poke_sprite(fs::path &rom_contents, fs::path &repo_root, bool force_unpack)
 {
@@ -35,8 +38,30 @@ void extract_poke_sprite(fs::path &rom_contents, fs::path &repo_root, bool force
     auto pokegra_dir   = wrap_unpack(pl_pokegra_narc.filename().string(), unpack_pokegra);
     auto otherpoke_dir = wrap_unpack(pl_otherpoke_narc.filename().string(), unpack_otherpoke);
 
-    convert_pokegra_files(pokegra_dir, nitrogfx, repo_root);
-    convert_otherpoke_files(otherpoke_dir, nitrogfx, repo_root);
+    indicators::ProgressBar pokegra_bar {
+        indicators::option::BarWidth { 80 },
+        indicators::option::ForegroundColor { indicators::Color::white },
+        indicators::option::FontStyles {
+            std::vector<indicators::FontStyle> { indicators::FontStyle::bold },
+        },
+        indicators::option::PrefixText { "pl_pokegra   " },
+    };
+
+    indicators::ProgressBar otherpoke_bar {
+        indicators::option::BarWidth { 80 },
+        indicators::option::ForegroundColor { indicators::Color::white },
+        indicators::option::FontStyles {
+            std::vector<indicators::FontStyle> { indicators::FontStyle::bold },
+        },
+        indicators::option::PrefixText { "pl_otherpoke " },
+    };
+
+    std::cout << "\nExtracting Pokemon Sprites..." << std::endl;
+
+    convert_pokegra_files(pokegra_dir, nitrogfx, repo_root, pokegra_bar);
+    convert_otherpoke_files(otherpoke_dir, nitrogfx, repo_root, otherpoke_bar);
+
+    std::cout << "\e[1;32m✔ Done\e[22;0m" << std::endl;
 }
 
 static inline std::tuple<fs::path, fs::path> map_bin_ntr(fs::path &base, std::string ntr_ext)
@@ -47,7 +72,7 @@ static inline std::tuple<fs::path, fs::path> map_bin_ntr(fs::path &base, std::st
     return { bin, ntr };
 }
 
-static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitrogfx, fs::path &repo_root)
+static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitrogfx, fs::path &repo_root, indicators::ProgressBar &bar)
 {
     std::vector<fs::path> files;
     for (auto &entry : fs::directory_iterator(pl_pokegra_contents)) {
@@ -58,14 +83,22 @@ static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitro
 
     if (files.size() % 6 != 0) {
         std::cerr << "FATAL: pl_pokegra file count not divisible by 6" << std::endl;
-        std::exit(1);
+        bar.mark_as_completed();
+        return;
     }
+
+    auto max_species = files.size() / 6;
+    bar.set_option(indicators::option::MaxProgress { max_species });
 
     auto base_res_dir = repo_root / "res" / "pokemon";
     size_t species = 0;
     std::vector<std::string> palette_args = { "-bitdepth", "8" };
 
     for (size_t j = 0; j < files.size(); j += 6, species++) {
+        bar.set_option(indicators::option::PostfixText {
+            "converting " + gSpeciesNames[species]
+        });
+
         std::vector<std::tuple<fs::path, fs::path>> file_map = {
             map_bin_ntr(files[j],     "NCGR"), // back, female
             map_bin_ntr(files[j + 1], "NCGR"), // back, male
@@ -95,10 +128,12 @@ static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitro
         nitrogfx::call(nitrogfx, std::get<1>(file_map[3]), male_front_target, sprite_args);
         nitrogfx::call(nitrogfx, std::get<1>(file_map[4]), normal_pal_target, palette_args);
         nitrogfx::call(nitrogfx, std::get<1>(file_map[5]), shiny_pal_target, palette_args);
+
+        bar.tick();
     }
 }
 
-static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &nitrogfx, fs::path &repo_root)
+static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &nitrogfx, fs::path &repo_root, indicators::ProgressBar &bar)
 {
     fs::path poke_res_root = repo_root / "res" / "pokemon";
 
@@ -111,7 +146,8 @@ static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &n
 
     if (files.size() != gOtherpokePaths.size()) {
         std::cerr << "FATAL: pl_otherpoke file count not equal to " << gOtherpokePaths.size() << std::endl;
-        std::exit(1);
+        bar.mark_as_completed();
+        return;
     }
 
     for (size_t i = 0; i < gOtherpokePaths.size(); i++) {
@@ -128,44 +164,64 @@ static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &n
         fs::copy_file(bin_path, ntr_path, fs::copy_options::overwrite_existing);
     }
 
+    bar.set_option(indicators::option::MaxProgress { gOtherpokePaths.size() });
+
     for (size_t i = 0; i < gOtherpokePals.size(); i++) {
+        auto base_path = gOtherpokePaths[i];
+        bar.set_option(indicators::option::PostfixText { "converting " + base_path });
+
         auto ntr_path = files[i].replace_extension(".NCGR");
-        auto png_path = poke_res_root / fs::path(gOtherpokePaths[i]);
+        auto png_path = poke_res_root / fs::path(base_path);
         auto pal_path = files[gOtherpokePals[i]];
 
         std::vector<std::string> sprite_args = MAKE_SPRITE_ARGS(pal_path.string());
 
         nitrogfx::call(nitrogfx, ntr_path, png_path, sprite_args);
+        bar.tick();
     }
 
     std::vector<std::string> palette_args = { "-bitdepth", "8" };
     for (size_t i = gOtherpokePals.size(); i < 248; i++) {
+        auto base_path = gOtherpokePaths[i];
+        bar.set_option(indicators::option::PostfixText { "converting " + base_path });
+
         auto ntr_path = files[i].replace_extension(".NCLR");
         auto pal_path = poke_res_root / fs::path(gOtherpokePaths[i]);
 
         nitrogfx::call(nitrogfx, ntr_path, pal_path, palette_args);
+        bar.tick();
     }
 
+    bar.set_option(indicators::option::PostfixText { "converting " + gOtherpokePaths[248] });
     auto ntr_path = files[248].replace_extension(".NCGR"); // substitute back sprite
     auto out_path = poke_res_root / fs::path(gOtherpokePaths[248]);
     auto pal_path = files[250].replace_extension(".NCLR");
     std::vector<std::string> sprite_args = MAKE_SPRITE_ARGS(pal_path);
     nitrogfx::call(nitrogfx, ntr_path, out_path, sprite_args);
+    bar.tick();
 
+    bar.set_option(indicators::option::PostfixText { "converting " + gOtherpokePaths[249] });
     ntr_path = files[249].replace_extension(".NCGR"); // substitute front sprite
     out_path = poke_res_root / fs::path(gOtherpokePaths[249]);
     nitrogfx::call(nitrogfx, ntr_path, out_path, sprite_args);
+    bar.tick();
 
+    bar.set_option(indicators::option::PostfixText { "converting " + gOtherpokePaths[250] });
     out_path = poke_res_root / fs::path(gOtherpokePaths[250]); // substitute palette
     nitrogfx::call(nitrogfx, pal_path, out_path, palette_args);
+    bar.tick();
 
+    bar.set_option(indicators::option::PostfixText { "converting " + gOtherpokePaths[251] });
     ntr_path = files[251].replace_extension(".NCGR"); // shadow sprite
     out_path = poke_res_root / fs::path(gOtherpokePaths[251]);
     pal_path = files[252].replace_extension(".NCLR");
     sprite_args = MAKE_SPRITE_ARGS(pal_path);
     nitrogfx::call(nitrogfx, ntr_path, out_path, sprite_args);
+    bar.tick();
 
+    bar.set_option(indicators::option::PostfixText { "converting " + gOtherpokePaths[252] });
     out_path = poke_res_root / fs::path(gOtherpokePaths[252]); // shadow palette
     nitrogfx::call(nitrogfx, pal_path, out_path, palette_args);
+    bar.tick();
 }
 
