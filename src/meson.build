@@ -1,7 +1,8 @@
 cpp_sources = files(
     'main.cpp',
-    'poke_sprites.cpp',
+    'wrap.cpp',
     'knarc.cpp',
     'nitrogfx.cpp',
     'species.cpp',
+    'poke_sprites.cpp',
 )

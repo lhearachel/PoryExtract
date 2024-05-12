@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <tuple>
 #include <vector>
@@ -8,15 +9,14 @@
 #include "env.h"
 #include "knarc.h"
 #include "nitrogfx.h"
-#include "skip_unpack.hpp"
 #include "species.h"
+#include "wrap.h"
 
 #define MAKE_SPRITE_ARGS(palette_path) { \
     "-palette", palette_path, \
     "-scanfronttoback", \
 };
 
-static std::tuple<fs::path, fs::path> unpack_narcs(fs::path &rom_contents, fs::path &knarc, bool force_unpack);
 static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitrogfx, fs::path &repo_root);
 static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &nitrogfx, fs::path &repo_root);
 
@@ -25,36 +25,18 @@ void extract_poke_sprite(fs::path &rom_contents, fs::path &repo_root, bool force
     fs::path knarc = std::getenv(KNARC);
     fs::path nitrogfx = std::getenv(NITROGFX);
 
-    auto [pl_pokegra_contents, pl_otherpoke_contents] = unpack_narcs(rom_contents, knarc, force_unpack);
-    convert_pokegra_files(pl_pokegra_contents, nitrogfx, repo_root);
-    convert_otherpoke_files(pl_otherpoke_contents, nitrogfx, repo_root);
-}
+    fs::path parent = rom_contents / "filesys" / "poketool" / "pokegra";
+    fs::path pl_pokegra_narc   = parent / "pl_pokegra.narc";
+    fs::path pl_otherpoke_narc = parent / "pl_otherpoke.narc";
 
-static std::tuple<fs::path, fs::path> unpack_narcs(fs::path &rom_contents, fs::path &knarc, bool force_unpack)
-{
-    fs::path pokegra_path = rom_contents / "filesys" / "poketool" / "pokegra";
-    fs::path pl_pokegra_narc = pokegra_path / "pl_pokegra.narc";
-    fs::path pl_otherpoke_narc = pokegra_path / "pl_otherpoke.narc";
+    auto unpack_pokegra   = std::bind(knarc::unpack, knarc, pl_pokegra_narc, force_unpack);
+    auto unpack_otherpoke = std::bind(knarc::unpack, knarc, pl_otherpoke_narc, force_unpack);
 
-    fs::path pl_pokegra_contents = pl_pokegra_narc.string() + "_contents";
-    fs::path pl_otherpoke_contents = pl_otherpoke_narc.string() + "_contents";
+    auto pokegra_dir   = wrap_unpack(pl_pokegra_narc.filename().string(), unpack_pokegra);
+    auto otherpoke_dir = wrap_unpack(pl_otherpoke_narc.filename().string(), unpack_otherpoke);
 
-    if (!force_unpack && fs::exists(pl_pokegra_contents)) {
-        skip_unpack_msg("pl_pokegra", pl_pokegra_contents);
-    } else {
-        knarc::unpack(knarc, pl_pokegra_narc, pl_pokegra_contents);
-    }
-
-    if (!force_unpack && fs::exists(pl_otherpoke_contents)) {
-        skip_unpack_msg("pl_otherpoke", pl_otherpoke_contents);
-    } else {
-        knarc::unpack(knarc, pl_otherpoke_narc, pl_otherpoke_contents);
-    }
-
-    return {
-        pl_pokegra_contents,
-        pl_otherpoke_contents,
-    };
+    convert_pokegra_files(pokegra_dir, nitrogfx, repo_root);
+    convert_otherpoke_files(otherpoke_dir, nitrogfx, repo_root);
 }
 
 static inline std::tuple<fs::path, fs::path> map_bin_ntr(fs::path &base, std::string ntr_ext)

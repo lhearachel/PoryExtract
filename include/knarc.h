@@ -3,11 +3,13 @@
 
 #include <filesystem>
 
+#include "wrap.h"
+
 namespace fs = std::filesystem;
 
 namespace knarc {
 
-void unpack(fs::path &knarc, fs::path &narc_path, fs::path &narc_contents);
+path_unpacked unpack(fs::path &knarc, fs::path &src, bool force);
 
 };
 

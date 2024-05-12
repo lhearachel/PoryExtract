@@ -1,19 +1,20 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
+#include <functional>
 #include <iostream>
 #include <unordered_map>
 
 #include <argparse/argparse.hpp>
+#include <subprocess.hpp>
 
 #include "action.h"
 #include "env.h"
-#include "skip_unpack.hpp"
-#include "subprocess.hpp"
+#include "wrap.h"
 
 namespace fs = std::filesystem;
 
-fs::path unpack_rom(fs::path &rom_path, bool force_unpack);
+path_unpacked unpack_rom(fs::path &rom_path, bool force_unpack);
 
 static const std::unordered_map<std::string, ExtractFunc> EXTRACT_ACTIONS = {
     { "poke_sprites", extract_poke_sprite },
@@ -55,7 +56,8 @@ int main(int argc, char *argv[]) {
     auto actions = program.get<std::vector<std::string>>("actions");
     auto force_unpack = program.get<bool>("force");
 
-    auto rom_contents_root = unpack_rom(rom_path, force_unpack);
+    auto unpack_bind = std::bind(unpack_rom, rom_path, force_unpack);
+    auto rom_contents_root = wrap_unpack(rom_path.filename().string(), unpack_bind);
 
     for (auto &action : actions) {
         auto match = EXTRACT_ACTIONS.find(action);
@@ -70,12 +72,11 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-fs::path unpack_rom(fs::path &rom_path, bool force_unpack)
+path_unpacked unpack_rom(fs::path &rom_path, bool force_unpack)
 {
     fs::path unpack_target = rom_path.filename().string() + "_contents";
     if (!force_unpack && fs::exists(unpack_target)) {
-        skip_unpack_msg("ROM", unpack_target.filename());
-        return unpack_target;
+        return { unpack_target, false };
     }
 
     fs::create_directory(unpack_target);
@@ -94,6 +95,6 @@ fs::path unpack_rom(fs::path &rom_path, bool force_unpack)
     });
     unpack.wait();
 
-    return unpack_target;
+    return { unpack_target, true };
 }
 
