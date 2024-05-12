@@ -39,6 +39,7 @@ int main(int argc, char *argv[]) {
     program.add_argument("actions")
         .metavar("ACTIONS")
         .help("an element to unpack from ROM")
+        .choices("poke_sprites")
         .nargs(argparse::nargs_pattern::any);
 
     try {

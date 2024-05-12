@@ -11,8 +11,14 @@
 #include "skip_unpack.hpp"
 #include "species.h"
 
+#define MAKE_SPRITE_ARGS(palette_path) { \
+    "-palette", palette_path, \
+    "-scanfronttoback", \
+};
+
 static std::tuple<fs::path, fs::path> unpack_narcs(fs::path &rom_contents, fs::path &knarc, bool force_unpack);
 static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitrogfx, fs::path &repo_root);
+static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &nitrogfx, fs::path &repo_root);
 
 void extract_poke_sprite(fs::path &rom_contents, fs::path &repo_root, bool force_unpack)
 {
@@ -21,6 +27,7 @@ void extract_poke_sprite(fs::path &rom_contents, fs::path &repo_root, bool force
 
     auto [pl_pokegra_contents, pl_otherpoke_contents] = unpack_narcs(rom_contents, knarc, force_unpack);
     convert_pokegra_files(pl_pokegra_contents, nitrogfx, repo_root);
+    convert_otherpoke_files(pl_otherpoke_contents, nitrogfx, repo_root);
 }
 
 static std::tuple<fs::path, fs::path> unpack_narcs(fs::path &rom_contents, fs::path &knarc, bool force_unpack)
@@ -74,6 +81,8 @@ static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitro
 
     auto base_res_dir = repo_root / "res" / "pokemon";
     size_t species = 0;
+    std::vector<std::string> palette_args = { "-bitdepth", "8" };
+
     for (size_t j = 0; j < files.size(); j += 6, species++) {
         std::vector<std::tuple<fs::path, fs::path>> file_map = {
             map_bin_ntr(files[j],     "NCGR"), // back, female
@@ -88,15 +97,7 @@ static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitro
             fs::rename(bin, ntr);
         }
 
-        std::vector<std::string> sprite_args = {
-            "-palette", std::get<1>(file_map[4]).string(),
-            "-object",
-            "-scanfronttoback",
-        };
-
-        std::vector<std::string> palette_args = {
-            "-bitdepth", "8",
-        };
+        std::vector<std::string> sprite_args = MAKE_SPRITE_ARGS(std::get<1>(file_map[4]).string());
 
         auto species_dir = base_res_dir / gSpeciesNames[species];
         auto female_back_target = species_dir / "female_back.png";
@@ -113,5 +114,76 @@ static void convert_pokegra_files(fs::path &pl_pokegra_contents, fs::path &nitro
         nitrogfx::call(nitrogfx, std::get<1>(file_map[4]), normal_pal_target, palette_args);
         nitrogfx::call(nitrogfx, std::get<1>(file_map[5]), shiny_pal_target, palette_args);
     }
+}
+
+static void convert_otherpoke_files(fs::path &pl_otherpoke_contents, fs::path &nitrogfx, fs::path &repo_root)
+{
+    fs::path poke_res_root = repo_root / "res" / "pokemon";
+
+    std::vector<fs::path> files;
+    for (auto &entry : fs::directory_iterator(pl_otherpoke_contents)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".bin") {
+            files.push_back(entry.path());
+        }
+    }
+
+    if (files.size() != gOtherpokePaths.size()) {
+        std::cerr << "FATAL: pl_otherpoke file count not equal to " << gOtherpokePaths.size() << std::endl;
+        std::exit(1);
+    }
+
+    for (size_t i = 0; i < gOtherpokePaths.size(); i++) {
+        auto target_path = fs::path(gOtherpokePaths[i]);
+        auto bin_path = files[i].string();
+
+        fs::path ntr_path;
+        if (target_path.extension() == ".png") {
+            ntr_path = files[i].replace_extension(".NCGR");
+        } else { // .pal
+            ntr_path = files[i].replace_extension(".NCLR");
+        }
+
+        fs::rename(bin_path, ntr_path);
+    }
+
+    for (size_t i = 0; i < gOtherpokePals.size(); i++) {
+        auto ntr_path = files[i].replace_extension(".NCGR");
+        auto png_path = poke_res_root / fs::path(gOtherpokePaths[i]);
+        auto pal_path = files[gOtherpokePals[i]];
+
+        std::vector<std::string> sprite_args = MAKE_SPRITE_ARGS(pal_path.string());
+
+        nitrogfx::call(nitrogfx, ntr_path, png_path, sprite_args);
+    }
+
+    std::vector<std::string> palette_args = { "-bitdepth", "8" };
+    for (size_t i = gOtherpokePals.size(); i < 248; i++) {
+        auto ntr_path = files[i].replace_extension(".NCLR");
+        auto pal_path = poke_res_root / fs::path(gOtherpokePaths[i]);
+
+        nitrogfx::call(nitrogfx, ntr_path, pal_path, palette_args);
+    }
+
+    auto ntr_path = files[248].replace_extension(".NCGR"); // substitute back sprite
+    auto out_path = poke_res_root / fs::path(gOtherpokePaths[248]);
+    auto pal_path = files[250].replace_extension(".NCLR");
+    std::vector<std::string> sprite_args = MAKE_SPRITE_ARGS(pal_path);
+    nitrogfx::call(nitrogfx, ntr_path, out_path, sprite_args);
+
+    ntr_path = files[249].replace_extension(".NCGR"); // substitute front sprite
+    out_path = poke_res_root / fs::path(gOtherpokePaths[249]);
+    nitrogfx::call(nitrogfx, ntr_path, out_path, sprite_args);
+
+    out_path = poke_res_root / fs::path(gOtherpokePaths[250]); // substitute palette
+    nitrogfx::call(nitrogfx, pal_path, out_path, palette_args);
+
+    ntr_path = files[251].replace_extension(".NCGR"); // shadow sprite
+    out_path = poke_res_root / fs::path(gOtherpokePaths[251]);
+    pal_path = files[252].replace_extension(".NCLR");
+    sprite_args = MAKE_SPRITE_ARGS(pal_path);
+    nitrogfx::call(nitrogfx, ntr_path, out_path, sprite_args);
+
+    out_path = poke_res_root / fs::path(gOtherpokePaths[252]); // shadow palette
+    nitrogfx::call(nitrogfx, pal_path, out_path, palette_args);
 }
 
