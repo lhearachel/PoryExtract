@@ -17,7 +17,8 @@ custom_target('configure',
         '--knarc', knarc_exe,
         '--nitrogfx', nitrogfx_exe,
         '--ndstool', ndstool_exe,
-    ]
+    ],
+    build_by_default: true
 )
 
 executable('poryextract',
