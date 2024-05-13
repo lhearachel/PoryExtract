@@ -5,6 +5,7 @@
 #include <vector>
 
 extern std::vector<std::string> gSpeciesNames;
+extern std::vector<std::string> gExtraPokeIconPaths;
 extern std::vector<std::string> gOtherpokePaths;
 extern std::vector<int> gOtherpokePals;
 

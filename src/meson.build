@@ -3,6 +3,7 @@ cpp_sources = files(
     'wrap.cpp',
     'knarc.cpp',
     'nitrogfx.cpp',
+    'binary.cpp',
     'species.cpp',
     'poke_sprites.cpp',
 )
